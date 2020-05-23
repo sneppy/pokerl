@@ -1,6 +1,6 @@
 from itertools import islice
 from functools import reduce
-from .enums import HandRanking
+from .enums import HandRanking, CardRank, CardSuit
 
 def eval_hand(hand) -> int:
 	"""  """
@@ -19,10 +19,10 @@ def eval_hand(hand) -> int:
 		#print(rank_sorted)
 		#print(suit_sorted)
 
-		straight = 0
-		flush = 0
-		both = 0
-		kind = 0
+		flush = CardSuit.NUM_SUITS
+		both = CardSuit.NUM_SUITS
+		kind = CardRank.NUM_RANKS
+		straight = CardRank.NUM_RANKS
 		fourakind = []
 		threeakind = []
 		twoakind = []
@@ -30,10 +30,11 @@ def eval_hand(hand) -> int:
 			# This block checks flush and straight flush
 			if suit.suit == (flush & 0xf):
 				flush += 0x100
-				if suit.rank + (flush >> 4 & 0xf) == (flush >> 8): both += 0x100
-			elif (flush >> 8) < 5:
-				flush = 0x100 | (suit.rank << 4) | suit.suit
-				both = flush
+
+				# Check straigth flush
+				if suit.rank + (both >> 8) == (both >> 4 & 0xf): both += 0x100
+				else: both = 0x100 | (suit.rank << 4) | suit.suit
+			elif (flush >> 8) < 5: both = flush = 0x100 | (suit.rank << 4) | suit.suit
 			
 			# This block checks N of a kind and straights
 			if rank.rank == (kind & 0xf): kind += 0x10
@@ -96,6 +97,7 @@ def compare_hands(hands) -> list:
 				# Add winner
 				winners.append(idx)
 		
+		# Next hand
 		idx += 1
 
 	onehot = [int(idx in winners) for idx in range(len(hands))]
