@@ -5,6 +5,7 @@ from pokerl.enums import HandRanking, CardRank, CardSuit
 def eval_hand(hand) -> int:
 	"""  """
 
+	if not hand: return HandRanking.NONE, []
 	if len(hand) == 1: return HandRanking.HIGH, [hand[0].rank]
 	else:
 		# Sort by rank
@@ -19,6 +20,7 @@ def eval_hand(hand) -> int:
 		#print(rank_sorted)
 		#print(suit_sorted)
 
+		idx = 0
 		flush = CardSuit.NUM_SUITS
 		both = CardSuit.NUM_SUITS
 		kind = CardRank.NUM_RANKS
@@ -26,6 +28,7 @@ def eval_hand(hand) -> int:
 		fourakind = []
 		threeakind = []
 		twoakind = []
+
 		for rank, suit in zip(rank_sorted, suit_sorted):			
 			# This block checks flush and straight flush
 			if suit.suit == (flush & 0xf):
@@ -34,7 +37,7 @@ def eval_hand(hand) -> int:
 				# Check straigth flush
 				if suit.rank + (both >> 8) == (both >> 4 & 0xf): both += 0x100
 				else: both = 0x100 | (suit.rank << 4) | suit.suit
-			elif (flush >> 8) < 5: both = flush = 0x100 | (suit.rank << 4) | suit.suit
+			elif (flush >> 8) < 5: both = flush = 0x100 | (suit.rank << 4) | suit.suit; flush_start = idx
 			
 			# This block checks N of a kind and straights
 			if rank.rank == (kind & 0xf): kind += 0x10
@@ -49,6 +52,8 @@ def eval_hand(hand) -> int:
 				kind = 0x10 | rank.rank
 				if rank.rank + (straight >> 4) == (straight & 0xf): straight += 0x10
 				elif (straight >> 4) < 5: straight = 0x10 | rank.rank
+			
+			idx += 1
 		
 		# Check last kind
 		numakind = kind >> 4
@@ -58,9 +63,10 @@ def eval_hand(hand) -> int:
 
 		if (both >> 8) >= 5: return HandRanking.STRAIGHT_FLUSH, [both >> 4 & 0xf]
 		elif fourakind: return HandRanking.POKER, [fourakind[0], next(c.rank for c in rank_sorted if c.rank != fourakind[0])]
+		elif len(threeakind) > 1: return HandRanking.FULL, [threeakind[0], threeakind[1]]
 		elif threeakind and twoakind: return HandRanking.FULL, [threeakind[0], twoakind[0]]
-		elif (flush >> 8) >= 5: return HandRanking.FLUSH, [flush >> 4 & 0xf]
-		elif (straight >> 8) >= 5: return HandRanking.STRAIGHT, [straight & 0xf]
+		elif (flush >> 8) >= 5: return HandRanking.FLUSH, [c.rank for c in suit_sorted[flush_start:flush_start + 5]]
+		elif (straight >> 4) >= 5: return HandRanking.STRAIGHT, [straight & 0xf]
 		elif threeakind: return HandRanking.TRIS, [threeakind[0], *islice((c.rank for c in rank_sorted if c.rank != threeakind[0]), 2)]
 		elif len(twoakind) > 1: return HandRanking.TWO_PAIR, [twoakind[0], twoakind[1], next(c.rank for c in rank_sorted if c.rank != twoakind[0] and c.rank != twoakind[1])]
 		elif twoakind: return HandRanking.PAIR, [twoakind[0], *islice((c.rank for c in rank_sorted if c.rank != twoakind[0]), 3)]
@@ -74,7 +80,7 @@ def compare_hands(hands) -> list:
 
 		return reduce(lambda value, kicker: value | (kicker[1] << (kicker[0] << 2)), enumerate(reversed(kickers)), 0)
 
-	rankings = [eval_hand(hand) for hand in hands]
+	rankings = (eval_hand(hand) for hand in hands)
 
 	winners = []
 	best_rank = HandRanking.NONE
