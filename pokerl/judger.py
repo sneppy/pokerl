@@ -1,4 +1,5 @@
 from itertools import islice
+from functools import reduce
 from .enums import HandRanking
 
 def eval_hand(hand) -> int:
@@ -62,10 +63,40 @@ def eval_hand(hand) -> int:
 		elif threeakind: return HandRanking.TRIS, [threeakind[0], *islice((c.rank for c in rank_sorted if c.rank != threeakind[0]), 2)]
 		elif len(twoakind) > 1: return HandRanking.TWO_PAIR, [twoakind[0], twoakind[1], next(c.rank for c in rank_sorted if c.rank != twoakind[0] and c.rank != twoakind[1])]
 		elif twoakind: return HandRanking.PAIR, [twoakind[0], *islice((c.rank for c in rank_sorted if c.rank != twoakind[0]), 3)]
-		else: return HandRanking.HIGH, (c.rank for c in rank_sorted[:5])
+		else: return HandRanking.HIGH, [c.rank for c in rank_sorted[:5]]
 
 def compare_hands(hands) -> list:
 	"""  """
-	
-	hand_rankings = [eval_hand(hand) for hand in hands]	
-	return hand_rankings
+
+	def get_kickers_value(kickers):
+		"""  """
+
+		return reduce(lambda value, kicker: value | (kicker[1] << (kicker[0] << 2)), enumerate(reversed(kickers)), 0)
+
+	rankings = [eval_hand(hand) for hand in hands]
+
+	winners = []
+	best_rank = HandRanking.NONE
+	best_kicker = 0
+	idx = 0
+
+	for rank, kickers in rankings:
+		kicker = get_kickers_value(kickers)
+		if rank < best_rank:
+			# Flush winners
+			best_rank = rank
+			best_kicker = kicker
+			winners = [idx]
+		elif rank == best_rank:
+			if kicker > best_kicker:
+				# Flush winners
+				kicker = best_kicker
+				winners = [idx]
+			elif kicker == best_kicker:
+				# Add winner
+				winners.append(idx)
+		
+		idx += 1
+
+	onehot = [int(idx in winners) for idx in range(len(hands))]
+	return onehot, winners, rankings
