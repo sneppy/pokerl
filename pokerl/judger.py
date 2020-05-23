@@ -1,6 +1,6 @@
 from itertools import islice
 from functools import reduce
-from .enums import HandRanking, CardRank, CardSuit
+from pokerl.enums import HandRanking, CardRank, CardSuit
 
 def eval_hand(hand) -> int:
 	"""  """

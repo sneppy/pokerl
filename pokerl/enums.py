@@ -84,3 +84,23 @@ class CardRank:
 		'K': KING,
 		'A': ACE
 	}
+
+class PokerMoves:
+	"""  """
+
+	FOLD = 0
+	CALL = 1
+	RAISE_ANY = 2
+	RAISE_TEN = 2
+	RAISE_QUARTER = 3
+	RAISE_HALF = 4
+	ALL_IN = 5
+
+class PlayerState:
+	"""  """
+
+	FOLDED = 0
+	ACTIVE = 1
+	CALLED = 2
+	ALL_IN = 3
+	BROKEN = 4

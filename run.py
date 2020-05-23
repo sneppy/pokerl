@@ -1,30 +1,20 @@
-import random
-import argparse
-from pokerl.cards import Card, CardRank, CardSuit
-from pokerl.judger import compare_hands, eval_hand
-from timeit import default_timer as timer
+from pokerl.game import Game, PokerMoves
 
-parser = argparse.ArgumentParser('pokerl')
-parser.add_argument('cards', nargs='+')
-args = parser.parse_args()
+game = Game(start_credits=100, num_players=4)
+game.reset()
+game.step(PokerMoves.RAISE_QUARTER)
+game.step(PokerMoves.CALL)
+game.step(PokerMoves.FOLD)
+game.step(PokerMoves.CALL)
 
-cards = [Card((CardRank.from_symbol[card[0]], CardSuit.from_symbol[card[1]])) for card in args.cards]
-print(cards)
-print(eval_hand(cards))
+game.step(PokerMoves.CALL)
+game.step(PokerMoves.CALL)
+game.step(PokerMoves.RAISE_TEN)
+game.step(PokerMoves.CALL)
+game.step(PokerMoves.FOLD)
 
-exit(0)
+game.step(PokerMoves.CALL)
+game.step(PokerMoves.RAISE_TEN)
+game.step(PokerMoves.CALL)
 
-cards = [Card((rank, suit)) for rank in range(13) for suit in range(4)]
-random.shuffle(cards)
-
-shared = cards[6:11]
-
-hands = [
-	[*cards[0:2], *shared],
-	[*cards[2:4], *shared],
-	[*cards[4:6], *shared]
-]
-
-print(hands)
-
-print(compare_hands(hands))
+# No winner ...
