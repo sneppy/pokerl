@@ -21,6 +21,7 @@ class Game:
 
 		self.deck = create_default_deck()
 		self.turn = 0
+		self.hand = 0
 		self.big_blind_idx = 0
 		self.small_blind_idx = 0
 		self.active_player = 0
@@ -73,6 +74,12 @@ class Game:
 
 		return [self.big_blind, self.small_blind]
 	
+	@property
+	def game_over(self):
+		"""  """
+
+		return np.sum(self.player_states != PlayerState.BROKEN) == 1
+	
 	def get_first_playing(self, idx):
 		"""  """
 
@@ -111,12 +118,13 @@ class Game:
 		"""  """
 
 		card_idx = 5 + player * 2
-		return self.community_cards + self.deck[card_idx:card_idx + 2]
+		return self.deck[:5] + self.deck[card_idx:card_idx + 2]
 
-	def reset(self):
+	def reset(self, **config):
 		"""  """
 
 		# Reset initial state
+		self.hand = 0
 		self.active_player = 0
 		self.big_blind_idx = self.num_players - 1
 		self.small_blind_idx = self.big_blind_idx - 1
@@ -128,96 +136,131 @@ class Game:
 	def setup_hand(self):
 		"""  """
 
+		self.hand += 1
+
+		# Reset player states
+		self.turn = 0
+		self.player_states[self.credits <= self.big_blind] = PlayerState.BROKEN
+		self.player_states[self.player_states != PlayerState.BROKEN] = PlayerState.ACTIVE
+		self.bets[:] = .0
+		self.pending_bets[:] = .0
+
 		# Shuffle deck
 		random.shuffle(self.deck)
 		self.logger.info('Dealing cards')
 		for player in range(self.num_players):
 			if self.player_states[player] != PlayerState.BROKEN:
-				self.logger.info('Player %d has cards: %s', player, self.get_cards_of(player).__repr__())
+				self.logger.info('Player %d has cards: %s', player, self.get_cards_of(player))
 
-		# Reset player states
-		self.turn = 0
-		self.player_states[self.player_states != PlayerState.BROKEN] = PlayerState.ACTIVE
-		self.bets[:] = .0
-		self.pending_bets[:] = .0
-		self.payoffs[:] = .0
+		# Update blinds and active player
+		self.small_blind_idx = self.get_first_playing(self.small_blind_idx + 1)
+		self.big_blind_idx = self.get_first_playing(self.small_blind_idx + 1)
+		self.active_player = self.get_first_playing(self.big_blind_idx + 1)
 		
 		# Blind bets
-		self.logger.info('Player %d is big blind', self.big_blind_idx)
-		self.logger.info('Big blind is $%.2f; small blind is $%.2f', self.big_blind, self.small_blind)
 		self.pending_bets[self.blind_idx] += self.blind_value
 		self.player_states[self.big_blind_idx] = PlayerState.CALLED
 		self.minimum_raise_value = self.big_blind
 
-		# Update active player
-		self.active_player = self.get_first_playing(self.big_blind_idx + 1)
+		self.logger.info('; '.join(['Player %d is %s with $%.2f' % (player, PlayerState.as_string[state], self.credits[player]) for player, state in enumerate(self.player_states)]))
+		self.logger.info('Player %d is big blind', self.big_blind_idx)
+		self.logger.info('Big blind is $%.2f; small blind is $%.2f', self.big_blind, self.small_blind)
 		self.logger.info('Player %d starts the turn', self.active_player)
-
-		# Update blinds for next hand
-		self.small_blind_idx = self.big_blind_idx
-		self.big_blind_idx = self.active_player
-
-	def next_turn(self):
+	
+	def end_hand(self):
 		"""  """
-		
+
 		# Commit pending bets
 		self.bets += self.pending_bets
 		self.credits -= self.pending_bets
 		self.pending_bets[:] = .0
-
-		# Reset minimum raise
 		self.minimum_raise_value = .0
+		
+		self.logger.info('Pot is $%.2f', self.pot)
 
-		# Check turn state:
-		# -	if only one player can be active
-		# 	game has handed
-		num_contestant = np.sum(np.logical_or(self.player_states == PlayerState.CALLED, self.player_states == PlayerState.ALL_IN))
+		# Get number of potential winners
+		potential_winners = np.logical_and(self.player_states != PlayerState.BROKEN, self.player_states != PlayerState.FOLDED)
+		num_potential_winners = np.sum(potential_winners)
+		assert num_potential_winners > 0, 'Invalid state: no potential winner'
+		
+		if num_potential_winners == 1:
+			# Winner takes all
+			winner = np.argmax(potential_winners)
 
-		if num_contestant == 0: raise AssertionError('Invalid state, all players folded')
-		elif self.turn == 3:
-			# Last turn, end game.
-			# Build player hands
-			hands = [self.get_hand_for(idx) if state in [PlayerState.CALLED, PlayerState.ALL_IN] else [] for idx, state in enumerate(self.player_states)]
-			self.logger.debug('Final hands: %s', hands.__repr__())
+			self.payoffs[winner] = self.pot
+			self.credits[winner] += self.pot
 
+			self.logger.info('Player %d wins by last stand', winner)
+		else:	
+			# Get players' hands
+			hands = [self.get_hand_for(player) if state == PlayerState.CALLED or state == PlayerState.ALL_IN else [] for player, state in enumerate(self.player_states)]
 			onehot, winners, rankings = compare_hands(hands)
 			winning_hands = [rankings[winner] for winner in winners]
-			self.logger.info('Player(s) %s wins the hand with a %s', winners.__repr__(), HandRanking.as_string[winning_hands[0][0]])
-			# TODO: Handle all-ins
+
+			# Distribute wins
 			self.payoffs = self.pot * np.array(onehot) / np.sum(onehot)
 			self.credits += self.payoffs
-			self.logger.info('Total pot is $%.2f', self.pot)
-			self.logger.info('; '.join(['Player %d takes $%.2f' % (player, payoff) for player, payoff in enumerate(self.payoffs) if payoff > .0]))
 
-			# Set broken state
-			self.player_states[self.credits <= self.big_blind] = PlayerState.BROKEN
-			self.logger.info('; '.join(['Player %d has $%.2f' % credit for credit in enumerate(self.credits)]))
-			
-			# Setup new hand
-			self.setup_hand()
-		else:
-			self.logger.info('Community cards: %s', self.deck[:self.turn + 3].__repr__())
-
-			# Normal state, we have some
-			# players that are playing
-			# and we need to deal one card
-			self.turn += 1
-
-			# Reset active state
-			self.player_states[self.player_states == PlayerState.CALLED] = PlayerState.ACTIVE
-	
-	def next(self):
-		"""  """
+			self.logger.debug('Final hands: %s', hands)
+			self.logger.debug('Hand rankings: %s', rankings)
+			self.logger.info('Player(s) %s wins with %s', winners, ', '.join([HandRanking.as_string[ranking] for ranking, kickers in winning_hands]))
 		
-		# Check if there is no active player
-		current_player = self.active_player
-		self.active_player = (current_player + 1) % self.num_players
+		# Next hand
+		self.setup_hand()
 
-		while self.player_states[self.active_player] != PlayerState.ACTIVE:
-			if self.active_player == current_player: self.next_turn()
+	def next_turn(self):
+		"""  """
+
+		# Commit pending bets
+		self.bets += self.pending_bets
+		self.credits -= self.pending_bets
+		self.pending_bets[:] = .0
+		self.minimum_raise_value = .0
+		
+		# Next turn
+		self.turn += 1
+
+		if self.turn == 4:
+			self.end_hand()
+			return self.game_over, True, True
+		else:
+			next_turn_players = self.player_states == PlayerState.CALLED
+			num_next_turn_players = np.sum(next_turn_players)
+
+			if num_next_turn_players > 1:
+				# Reset states
+				self.player_states[next_turn_players] = PlayerState.ACTIVE
+
+			self.logger.info('Community cards: %s', self.deck[:self.turn + 2].__repr__())
+			self.active_player = (self.active_player + 1) % self.num_players
+			return False, False, True
+	
+	def next_player(self) -> tuple:
+		"""  """
+
+		# Get number of playing players
+		active_players = np.logical_and(self.player_states != PlayerState.BROKEN, self.player_states != PlayerState.FOLDED)
+		num_active_players = np.sum(active_players)
+
+		if num_active_players > 1:
+			# Proceed normally
+			done = (False, False, False)
+			current_player = self.active_player
 			self.active_player = (self.active_player + 1) % self.num_players
 
-	def step(self, action: Union[int, float]):
+			while self.player_states[self.active_player] != PlayerState.ACTIVE:
+				if current_player == self.active_player:
+					done = self.next_turn()
+					if done[0]: return done # Game is over
+				else: self.active_player = (self.active_player + 1) % self.num_players
+			
+			return done
+		else:
+			# One winner takes all
+			self.end_hand()
+			return False, True, False
+
+	def step(self, action: Union[int, float]) -> tuple:
 		"""  """
 
 		# TODO: Allow for both discrete actions
@@ -241,41 +284,40 @@ class Game:
 				self.logger.info('Player %d checks', self.active_player)
 			else:
 				# Call first
-				bet_value = high_bet = self.high_bet
+				bet_value = max(self.high_bet, self.big_blind)
 				credit = self.credits[self.active_player]
+				self.player_states[self.active_player] = PlayerState.CALLED
 
-				if action >= PokerMoves.RAISE_ANY:
-					future_credit = credit - bet_value
-					raise_factor = [0.1, 0.25, 0.5, 1.0][action - PokerMoves.RAISE_ANY]
-					raise_value = future_credit * raise_factor
-
-					# Add raise value
-					bet_value += raise_value
-				
-				if bet_value > credit:
-					# We are all in
+				if action == PokerMoves.ALL_IN:
 					bet_value = credit
 					self.player_states[self.active_player] = PlayerState.ALL_IN
 					self.logger.info('Player %d goes all-in with $%.2f', self.active_player, bet_value)
+				elif action >= PokerMoves.RAISE_ANY:
+					# Add raise value
+					future_credit = credit - bet_value
+					raise_factor = [0.1, 0.25, 0.5, 1.0][action - PokerMoves.RAISE_ANY]
+					raise_value = future_credit * raise_factor
+					bet_value += raise_value
+				
+				if bet_value > self.high_bet:
+					# We raised the high bet, reset states
+					current_state = self.player_states[self.active_player]
+					self.player_states[self.player_states == PlayerState.CALLED] = PlayerState.ACTIVE
+					self.player_states[self.active_player] = current_state
+
+					self.logger.info('Player %d raises to $%.2f', self.active_player, bet_value)
 				else:
-					if bet_value > high_bet:
-						# We also raised
-						self.player_states[self.player_states == PlayerState.CALLED] = PlayerState.ACTIVE
-						self.logger.info('Player %d raises to $%.2f', self.active_player, bet_value)
-					else:
-						self.logger.info('Player %d called $%.2f', self.active_player, bet_value)
-					
-					# We called
-					self.player_states[self.active_player] = PlayerState.CALLED
+					# We called the high bet
+					self.logger.info('Player %d called $%.2f', self.active_player, bet_value)
 				
 				# Set minimum raise value
-				if bet_value > high_bet:
-					self.minimum_raise_value = bet_value - high_bet
-					self.logger.debug('Minimum raise value is $%.2f', self.minimum_raise_value)
+				if bet_value > self.high_bet:
+					self.minimum_raise_value = bet_value - self.high_bet
+					self.logger.info('Minimum raise value is $%.2f', self.minimum_raise_value)
 				
 				# Update pending bets
 				self.pending_bets[self.active_player] = bet_value
 			
 			# Next player
-			self.next()
+			return self.next_player()
 		else: raise NotImplementedError

@@ -139,3 +139,7 @@ cython_debug/
 
 # VS Code
 /.vscode/
+
+# Temp files and folders
+temp/
+temp.*
