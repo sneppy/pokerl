@@ -1,12 +1,38 @@
+from typing import List, Tuple
 from itertools import islice
 from functools import reduce
-from pokerl.enums import HandRanking, CardRank, CardSuit
+from .cards import Card
+from .enums import HandRanking, CardRank, CardSuit
 
-def eval_hand(hand) -> int:
-	"""  """
+def eval_hand(hand: List[Card]) -> Tuple[int, List[int]]:
+	"""Evaluate hand of cards
+
+	Params
+	------
+	`hand` : list of cards
+		Up to seven cards to evaluate
+		as a poker hand.
+	
+	Returns
+	-------
+	tuple
+		A tuple where the first item
+		is the hand ranking, as in
+		HandRanking enum, and the second
+		is a list of kickers used to
+		break ties. The number of kickers
+		depends on the type of hand; for
+		instance, only one kicker is
+		returned for a straight, and five
+		are returned for a flush.
+	"""
 
 	if not hand: return HandRanking.NONE, []
-	if len(hand) == 1: return HandRanking.HIGH, [hand[0].rank]
+	elif len(hand) == 1: return HandRanking.HIGH, [hand[0].rank]
+	elif len(hand) == 2:
+		first, second = hand
+		if first.rank == second.rank: return HandRanking.PAIR, [first.rank]
+		else: return HandRanking.HIGH, [max(first.rank, second.rank), min(first.rank, second.rank)]
 	else:
 		# Sort by rank
 		rank_sorted = sorted(hand, key=lambda c: c.rank, reverse=True)
@@ -23,8 +49,8 @@ def eval_hand(hand) -> int:
 		idx = 0
 		flush = CardSuit.NUM_SUITS
 		both = CardSuit.NUM_SUITS
-		kind = CardRank.NUM_RANKS
-		straight = CardRank.NUM_RANKS
+		kind = 0
+		straight = 0
 		fourakind = []
 		threeakind = []
 		twoakind = []
@@ -62,23 +88,55 @@ def eval_hand(hand) -> int:
 		elif numakind == 4: fourakind.append(kind & 0xf)
 
 		if (both >> 8) >= 5: return HandRanking.STRAIGHT_FLUSH, [both >> 4 & 0xf]
-		elif fourakind: return HandRanking.POKER, [fourakind[0], next(c.rank for c in rank_sorted if c.rank != fourakind[0])]
+		elif fourakind: return HandRanking.POKER, [fourakind[0], *islice((c.rank for c in rank_sorted if c.rank != fourakind[0]), 1)]
 		elif len(threeakind) > 1: return HandRanking.FULL, [threeakind[0], threeakind[1]]
 		elif threeakind and twoakind: return HandRanking.FULL, [threeakind[0], twoakind[0]]
 		elif (flush >> 8) >= 5: return HandRanking.FLUSH, [c.rank for c in suit_sorted[flush_start:flush_start + 5]]
 		elif (straight >> 4) >= 5: return HandRanking.STRAIGHT, [straight & 0xf]
 		elif threeakind: return HandRanking.TRIS, [threeakind[0], *islice((c.rank for c in rank_sorted if c.rank != threeakind[0]), 2)]
-		elif len(twoakind) > 1: return HandRanking.TWO_PAIR, [twoakind[0], twoakind[1], next(c.rank for c in rank_sorted if c.rank != twoakind[0] and c.rank != twoakind[1])]
+		elif len(twoakind) > 1: return HandRanking.TWO_PAIR, [twoakind[0], twoakind[1], *islice((c.rank for c in rank_sorted if c.rank != twoakind[0] and c.rank != twoakind[1]), 1)]
 		elif twoakind: return HandRanking.PAIR, [twoakind[0], *islice((c.rank for c in rank_sorted if c.rank != twoakind[0]), 3)]
 		else: return HandRanking.HIGH, [c.rank for c in rank_sorted[:5]]
 
-def compare_hands(hands) -> list:
-	"""  """
 
-	def get_kickers_value(kickers):
-		"""  """
 
-		return reduce(lambda value, kicker: value | (kicker[1] << (kicker[0] << 2)), enumerate(reversed(kickers)), 0)
+def get_kickers_value(kickers) -> int:
+	"""Returns the kickers value as a bit-packed integer
+	
+	For instance, the kickers `[9, 8, 3]`
+	are returned as `(9 << 8) | (8 << 4)
+	| 3`
+	"""
+
+	return reduce(lambda value, kicker: value | (kicker[1] << (kicker[0] << 2)), enumerate(reversed(kickers)), 0)
+
+def compare_hands(hands: List[List[Card]]) -> Tuple[List[int], List[int], Tuple[int, List[int]]]:
+	"""Compare multiple hands
+	
+	Returns the winner and the
+	rankings of each hand
+
+	Params
+	------
+	`hand` : list of hands
+		A list of lists of cards, one for
+		each player to compare. Ideally they
+		should all have the same number of
+		cards
+	
+	Returns
+	-------
+	tuple
+		Returns a tuple where:
+		- the first element is a one-hot
+			encoded array of the winners;
+		- the second element is a list
+			with the indices of the winner;
+		- the last element is a list of
+			hand rankings, as output by
+			the `eval_hand` function, one
+			for each hand
+	"""
 
 	rankings = [eval_hand(hand) for hand in hands]
 
