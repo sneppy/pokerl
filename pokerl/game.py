@@ -80,6 +80,20 @@ class Game:
 
 		return np.sum(self.player_states != PlayerState.BROKEN) == 1
 	
+	@property
+	def active_state(self):
+		"""  """
+
+		return dict(
+			player_cards=self.get_cards_of(self.active_player),
+			community_cards=self.community_cards,
+			credits=self.credits,
+			bets=self.bets,
+			pending_bets=self.pending_bets,
+			minimum_raise_value=self.minimum_raise_value,
+			valid_actions=self.get_valid_actions(self.active_player)
+		)
+	
 	def get_first_playing(self, idx):
 		"""  """
 
