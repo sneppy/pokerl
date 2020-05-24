@@ -31,28 +31,34 @@ class Game:
 		self.payoffs = np.zeros((self.num_players,))
 	
 	@property
-	def shared_cards(self):
+	def community_cards(self):
 		"""  """
 
 		return [] if self.turn == 0 else self.deck[:self.turn + 2]
 	
 	@property
-	def pot(self):
+	def pot(self) -> float:
 		"""  """
 
 		return np.sum(self.bets)
 	
 	@property
-	def high_bet(self):
+	def high_bet(self) -> float:
 		"""  """
 		
 		return np.max(self.pending_bets)
 	
 	@property
-	def high_bidders(self):
+	def high_bidders(self) -> np.ndarray:
 		"""  """
 
 		return self.bets == self.high_bet
+	
+	@property
+	def pending_credits(self) -> np.ndarray:
+		"""  """
+
+		return self.credits - self.pending_bets
 	
 	@property
 	def blind_idx(self):
@@ -71,7 +77,20 @@ class Game:
 
 		return (idx + np.argmax(np.roll(self.player_states, -idx) != PlayerState.BROKEN)) % self.num_players
 	
-	def get_cards_of(self, player):
+	def get_valid_actions(self, player: int=None) -> tuple:
+		"""  """
+
+		if player is None: player = self.active_player
+
+		onehot = np.ones((PokerMoves.NUM_MOVES))
+		if self.high_bet > self.credits[player]:
+			# Player cannot call or raise, but maybe can all-in
+			onehot[[PokerMoves.CALL, PokerMoves.RAISE_TEN, PokerMoves.RAISE_QUARTER, PokerMoves.RAISE_HALF]] = 0
+		
+		valids = [action for action in range(PokerMoves.NUM_MOVES) if onehot[action]]
+		return onehot, valids
+	
+	def get_cards_of(self, player: int):
 		"""  """
 
 		card_idx = 5 + player * 2
@@ -81,7 +100,7 @@ class Game:
 		"""  """
 
 		card_idx = 5 + player * 2
-		return self.shared_cards + self.deck[card_idx:card_idx + 2]
+		return self.community_cards + self.deck[card_idx:card_idx + 2]
 
 	def reset(self):
 		"""  """
@@ -162,7 +181,7 @@ class Game:
 			# Setup new hand
 			self.setup_hand()
 		else:
-			self.logger.info('Shared cards: %s', self.deck[:self.turn + 3].__repr__())
+			self.logger.info('Community cards: %s', self.deck[:self.turn + 3].__repr__())
 
 			# Normal state, we have some
 			# players that are playing
@@ -191,8 +210,10 @@ class Game:
 
 		if isinstance(action, int):
 			# TODO: Compute valid actions
-			#valid_actions = []
-			#if not action in valid_actions: raise ValueError
+			_, valid_actions = self.get_valid_actions()
+			if not action in valid_actions:
+				self.logger.error('Player %d invalid move: `%s`', self.active_player, PokerMoves.as_string[action])
+				raise ValueError
 
 			self.logger.info('High bet is %.2f', self.high_bet)
 			self.logger.debug('Player %d played action: %s', self.active_player, PokerMoves.as_string[action])
@@ -203,7 +224,7 @@ class Game:
 			else:
 				# Call first
 				bet_value = high_bet = self.high_bet
-				credit = self.credits[self.active_player] + self.pending_bets[self.active_player] # Needed for small blind
+				credit = self.credits[self.active_player]
 
 				if action >= PokerMoves.RAISE_ANY:
 					future_credit = credit - bet_value
