@@ -110,7 +110,7 @@ def get_kickers_value(kickers) -> int:
 
 	return reduce(lambda value, kicker: value | (kicker[1] << (kicker[0] << 2)), enumerate(reversed(kickers)), 0)
 
-def compare_hands(hands: List[List[Card]]) -> Tuple[List[int], List[int], Tuple[int, List[int]]]:
+def compare_rankings(rankings: List[Tuple[int, List[int]]]) -> Tuple[List[int], List[int], Tuple[int, List[int]]]:
 	""" Compares multiple hands
 	
 	Returns the winner and the
@@ -118,11 +118,9 @@ def compare_hands(hands: List[List[Card]]) -> Tuple[List[int], List[int], Tuple[
 
 	Params
 	------
-	`hand` : list of hands
-		A list of lists of cards, one for
-		each player to compare. Ideally they
-		should all have the same number of
-		cards
+	`rankings` : list of hand rankings
+		A list of hand rankings with
+		kickers, as output by `eval_hand`
 	
 	Returns
 	-------
@@ -131,14 +129,8 @@ def compare_hands(hands: List[List[Card]]) -> Tuple[List[int], List[int], Tuple[
 		- the first element is a one-hot
 			encoded array of the winners;
 		- the second element is a list
-			with the indices of the winner;
-		- the last element is a list of
-			hand rankings, as output by
-			the `eval_hand` function, one
-			for each hand
+			with the indices of the winner.
 	"""
-
-	rankings = [eval_hand(hand) for hand in hands]
 
 	winners = []
 	best_rank = HandRanking.NONE
@@ -164,5 +156,36 @@ def compare_hands(hands: List[List[Card]]) -> Tuple[List[int], List[int], Tuple[
 		# Next hand
 		idx += 1
 
-	onehot = [int(idx in winners) for idx in range(len(hands))]
-	return onehot, winners, rankings
+	onehot = [int(idx in winners) for idx, _ in enumerate(rankings)]
+	return onehot, winners
+
+def compare_hands(hands: List[List[Card]]) -> Tuple[List[int], List[int], Tuple[int, List[int]]]:
+	""" Compares multiple hands
+	
+	Returns the winner and the
+	rankings of each hand
+
+	Params
+	------
+	`hand` : list of hands
+		A list of lists of cards, one for
+		each player to compare. Ideally they
+		should all have the same number of
+		cards
+	
+	Returns
+	-------
+	tuple
+		Returns a tuple where:
+		- the first element is a one-hot
+			encoded array of the winners;
+		- the second element is a list
+			with the indices of the winner;
+		- the last element is a list of
+			hand rankings, as output by
+			the `eval_hand` function, one
+			for each hand.
+	"""
+
+	rankings = [eval_hand(hand) for hand in hands]
+	return compare_rankings(rankings) + (rankings,)

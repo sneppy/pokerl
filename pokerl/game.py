@@ -2,12 +2,39 @@ import random
 import logging
 import numpy as np
 from typing import Union, List, Tuple, Generator
-from .judger import compare_hands
+from .judger import compare_hands, compare_rankings, eval_hand
 from .cards import Card, create_default_deck
 from .enums import PokerMoves, PlayerState, HandRanking
 
 class Game:
-	"""  """
+	""" A Texas Hold'em game
+	
+	Usage
+	-----
+
+	```python
+	import sys
+	import logging
+	import numpy as np
+	from pokerl import Game
+
+	# Enable logging
+	logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+
+	# Create game
+	game = Game(num_players=4, start_credits=100)
+
+	for g in range(10):
+		game.reset()
+		game_over = False
+		while not game_over:
+			# Get random action from valid actions
+			v, _ = game.get_valid_actions()
+			u = np.random.choice(len(v), p=v / np.sum(v))
+
+			game_over, *_ = game.step(u)
+	```
+	"""
 
 	def __init__(self, **config):
 		""" TODO """
@@ -144,7 +171,9 @@ class Game:
 		Params
 		------
 		player : int
-			index of the player
+			index of the player. If `None`,
+			`self.active_player` is used
+			isntead.
 		
 		Returns
 		-------
@@ -247,10 +276,16 @@ class Game:
 		# Commit pending bets
 		self.bets += self.pending_bets
 		self.credits -= self.pending_bets
+
 		self.pending_bets[:] = .0
 		self.minimum_raise_value = .0
 		
-		self.logger.info('Pot is $%.2f', self.pot)
+		self.logger.info('Pot value is $%.2f', self.pot)
+
+		# Reset payoffs; we only reset them
+		# here so that they are available after
+		# hand has ended
+		self.payoffs[:] = .0
 
 		# Get number of potential winners
 		potential_winners = np.logical_and(self.player_states != PlayerState.BROKEN, self.player_states != PlayerState.FOLDED)
@@ -266,23 +301,56 @@ class Game:
 
 			self.logger.info('Player %d wins by last stand', winner)
 		else:
-			# TODO: Handle different pots for all-ins
+			# Make working copy of bets
+			bets = np.copy(self.bets)
 
-			# Get players' hands
-			hands = [self.get_hand_for(player) if state == PlayerState.CALLED or state == PlayerState.ALL_IN else [] for player, state in enumerate(self.player_states)]
-			onehot, winners, rankings = compare_hands(hands)
-			winning_hands = [rankings[winner] for winner in winners]
-
-			# Distribute wins
-			self.payoffs = self.pot * np.array(onehot) / np.sum(onehot)
-			self.credits += self.payoffs
+			# First compute hand rankings
+			hands = (self.get_hand_for(player) if state == PlayerState.CALLED or state == PlayerState.ALL_IN else [] for player, state in enumerate(self.player_states))
+			hand_rankings = list(map(eval_hand, hands))
+			none_ranking = (HandRanking.NONE, [])
 
 			self.logger.debug('Final hands: %s', hands)
-			self.logger.debug('Hand rankings: %s', rankings)
-			self.logger.info('Player(s) %s wins with %s', winners, ', '.join([HandRanking.as_string[ranking] for ranking, kickers in winning_hands]))
+
+			# Sort players by lowest bets and generate allins iterator
+			sorted_players = np.argsort(self.bets)
+			showdown = (player for player in sorted_players if self.player_states[player] == PlayerState.CALLED or self.player_states[player] == PlayerState.ALL_IN)
+			
+			for player in showdown:
+				if bets[player] == .0: break # Nothing left to split
+				if num_potential_winners == 1:
+					# Player must be potential winner
+					self.payoffs[player] += np.sum(bets)
+					self.logger.info('Player %d wins by last stand', player)
+
+					break
+
+				# Get max bet for this player
+				max_bet = bets[player]
+				max_bets = np.clip(bets, .0, max_bet)
+				
+				# Get hand winners and distribute wins
+				onehot, winners = compare_rankings(hand_rankings)
+				winning_hands = (hand_rankings[winner] for winner in winners)
+
+				if len(winners) == 1: self.payoffs[winners] += np.sum(max_bets)
+				else: self.payoffs += np.sum(max_bets) * np.array(onehot) / np.sum(onehot)
+
+				self.logger.debug('Hand rankings: %s', hand_rankings)
+				self.logger.info('Player(s) %s wins with %s', winners, ', '.join([HandRanking.as_string[ranking] for ranking, kickers in winning_hands]))
+
+				# Reset player hand and subtract max bets
+				hand_rankings[player] = none_ranking
+				bets -= max_bets
+
+				num_potential_winners -= 1
+
+			# Distribute wins
+			self.credits += self.payoffs
 		
 		# Compute player hand's net value
 		self.payoffs -= self.bets
+
+		self.logger.info('Players\'s net profits: %s', self.payoffs)
 		
 		# Next hand
 		self.setup_hand()
@@ -302,6 +370,7 @@ class Game:
 		# Commit pending bets
 		self.bets += self.pending_bets
 		self.credits -= self.pending_bets
+
 		self.pending_bets[:] = .0
 		self.minimum_raise_value = .0
 		
@@ -343,12 +412,12 @@ class Game:
 		"""
 
 		# Get number of playing players
-		active_players = np.logical_and(self.player_states != PlayerState.BROKEN, self.player_states != PlayerState.FOLDED)
-		num_active_players = np.sum(active_players)
+		playing_players = np.logical_and(self.player_states != PlayerState.BROKEN, self.player_states != PlayerState.FOLDED)
+		num_playing_players = np.sum(playing_players)
 
-		if num_active_players > 1:
+		if num_playing_players > 1:
 			# Proceed normally
-			done = (False, False, False)
+			done = False, False, False
 			current_player = self.active_player
 			self.active_player = (self.active_player + 1) % self.num_players
 
@@ -357,6 +426,8 @@ class Game:
 					done = self.next_turn()
 					if done[0]: return done # Game is over
 				else: self.active_player = (self.active_player + 1) % self.num_players
+
+			self.logger.info('It\'s Player %d\'s turn', self.active_player)
 			
 			return done
 		else:
@@ -394,7 +465,7 @@ class Game:
 			_, valid_actions = self.get_valid_actions()
 			if not action in valid_actions:
 				self.logger.error('Player %d invalid move: `%s`', self.active_player, PokerMoves.as_string[action])
-				raise ValueError
+				raise ValueError('Player %d invalid move: `%s`' % (self.active_player, PokerMoves.as_string[action]))
 
 			self.logger.info('High bet is $%.2f', self.high_bet)
 			self.logger.debug('Player %d played action: %s', self.active_player, PokerMoves.as_string[action])
@@ -406,8 +477,9 @@ class Game:
 				self.player_states[self.active_player] = PlayerState.CALLED
 				self.logger.info('Player %d checks', self.active_player)
 			else:
-				# Call first
-				bet_value = max(self.high_bet, self.big_blind)
+				# Call first, always bet something
+				high_bet = self.high_bet
+				bet_value = max(high_bet, self.big_blind)
 				credit = self.credits[self.active_player]
 				self.player_states[self.active_player] = PlayerState.CALLED
 
@@ -418,25 +490,24 @@ class Game:
 				elif action >= PokerMoves.RAISE_ANY:
 					# Add raise value
 					future_credit = credit - bet_value
-					raise_factor = [0.1, 0.25, 0.5, 1.0][action - PokerMoves.RAISE_ANY]
+					raise_factor = [0.1, 0.25, 0.5][action - PokerMoves.RAISE_ANY]
 					raise_value = future_credit * raise_factor
 					bet_value += raise_value
 				
-				if bet_value > self.high_bet:
-					# We raised the high bet, reset states
+				if bet_value > high_bet:
+					# We raised the high bet, reset all aclled states to active
 					current_state = self.player_states[self.active_player]
 					self.player_states[self.player_states == PlayerState.CALLED] = PlayerState.ACTIVE
 					self.player_states[self.active_player] = current_state
 
+					# Set minimum raise value
+					self.minimum_raise_value = bet_value - high_bet
+
 					self.logger.info('Player %d raises to $%.2f', self.active_player, bet_value)
+					self.logger.info('Minimum raise value is $%.2f', self.minimum_raise_value)
 				else:
 					# We called the high bet
 					self.logger.info('Player %d called $%.2f', self.active_player, bet_value)
-				
-				# Set minimum raise value
-				if bet_value > self.high_bet:
-					self.minimum_raise_value = bet_value - self.high_bet
-					self.logger.info('Minimum raise value is $%.2f', self.minimum_raise_value)
 				
 				# Update pending bets
 				self.pending_bets[self.active_player] = bet_value

@@ -2,7 +2,7 @@ from typing import Union, List, Tuple
 from pokerl.enums import CardRank, CardSuit
 
 class Card:
-	"""  """
+	""" A playing card """
 
 	@property
 	def rank(self) -> int:
