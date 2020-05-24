@@ -30,3 +30,8 @@ class Card:
 		"""  """
 		
 		return chr(0x1f0a1 + self.value)
+
+def create_default_deck():
+	"""  """
+
+	return [Card((rank, suit)) for rank in range(CardRank.NUM_RANKS) for suit in range(CardSuit.NUM_SUITS)]

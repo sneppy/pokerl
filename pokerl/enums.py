@@ -63,7 +63,7 @@ class CardRank:
 	KING = 0xc
 	ACE = 0xd
 
-	NUM_RANKS = 14
+	NUM_RANKS = 13
 
 	as_string = ['Ace', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Jack', 'Queen', 'King', 'Ace']
 	as_symbol = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
@@ -96,6 +96,10 @@ class PokerMoves:
 	RAISE_HALF = 4
 	ALL_IN = 5
 
+	NUM_MOVES = 6
+
+	as_string = ['fold', 'call', 'raise 10%', 'raise 25%', 'raise half', 'all-in']
+
 class PlayerState:
 	"""  """
 
@@ -104,3 +108,7 @@ class PlayerState:
 	CALLED = 2
 	ALL_IN = 3
 	BROKEN = 4
+
+	NUM_STATES = 5
+
+	as_string = ['folded', 'active', 'called', 'all-in', 'broken']
