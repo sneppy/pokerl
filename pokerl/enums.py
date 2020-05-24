@@ -90,16 +90,18 @@ class PokerMoves:
 	"""  """
 
 	FOLD = 0
-	CALL = 1
-	RAISE_ANY = 2
-	RAISE_TEN = 2
-	RAISE_QUARTER = 3
-	RAISE_HALF = 4
-	ALL_IN = 5
+	CHECK = 1
+	CALL = 2
+	RAISE_ANY = 3
+	RAISE_TEN = 3
+	RAISE_QUARTER = 4
+	RAISE_HALF = 5
+	ALL_IN = 6
 
-	NUM_MOVES = 6
+	NUM_MOVES = 7
+	NUM_RAISE_MOVES = 3
 
-	as_string = ['fold', 'call', 'raise 10%', 'raise 25%', 'raise half', 'all-in']
+	as_string = ['fold', 'check', 'call', 'raise 10%', 'raise 25%', 'raise half', 'all-in']
 
 class PlayerState:
 	"""  """

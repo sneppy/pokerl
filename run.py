@@ -2,7 +2,7 @@ import sys
 import logging
 from pokerl.game import Game, PokerMoves
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 game = Game(start_credits=100, num_players=4)
 

@@ -28,6 +28,7 @@ class Game:
 		self.credits = np.zeros((self.num_players,))
 		self.bets = np.zeros((self.num_players,))
 		self.pending_bets = np.zeros((self.num_players,))
+		self.minimum_raise_value = .0
 		self.payoffs = np.zeros((self.num_players,))
 	
 	@property
@@ -82,12 +83,22 @@ class Game:
 
 		if player is None: player = self.active_player
 
+		credit = self.credits[player]
+		pending_credit = self.pending_credits[player]
+		raise_credit = credit - self.high_bet
 		onehot = np.ones((PokerMoves.NUM_MOVES))
-		if self.high_bet > self.credits[player]:
-			# Player cannot call or raise, but maybe can all-in
-			onehot[[PokerMoves.CALL, PokerMoves.RAISE_TEN, PokerMoves.RAISE_QUARTER, PokerMoves.RAISE_HALF]] = 0
 		
-		valids = [action for action in range(PokerMoves.NUM_MOVES) if onehot[action]]
+		# Compute minimum raise value
+		raise_values = np.array([0.1, 0.25, 0.5]) * raise_credit
+		raise_values = np.logical_and(raise_values > self.minimum_raise_value, (self.high_bet + raise_values) < credit)
+		onehot[PokerMoves.RAISE_ANY:PokerMoves.RAISE_ANY + PokerMoves.NUM_RAISE_MOVES] = raise_values
+
+		# Compute call and check validity
+		onehot[PokerMoves.CHECK] = self.high_bet == .0
+		onehot[PokerMoves.CALL] = self.high_bet < credit
+		
+		valids = [action for action, valid in enumerate(onehot) if valid]
+		self.logger.debug('Valid moves for player %d: %s', player, valids.__repr__())
 		return onehot, valids
 	
 	def get_cards_of(self, player: int):
@@ -136,6 +147,7 @@ class Game:
 		self.logger.info('Big blind is $%.2f; small blind is $%.2f', self.big_blind, self.small_blind)
 		self.pending_bets[self.blind_idx] += self.blind_value
 		self.player_states[self.big_blind_idx] = PlayerState.CALLED
+		self.minimum_raise_value = self.big_blind
 
 		# Update active player
 		self.active_player = self.get_first_playing(self.big_blind_idx + 1)
@@ -153,6 +165,9 @@ class Game:
 		self.credits -= self.pending_bets
 		self.pending_bets[:] = .0
 
+		# Reset minimum raise
+		self.minimum_raise_value = .0
+
 		# Check turn state:
 		# -	if only one player can be active
 		# 	game has handed
@@ -167,7 +182,7 @@ class Game:
 
 			onehot, winners, rankings = compare_hands(hands)
 			winning_hands = [rankings[winner] for winner in winners]
-			self.logger.info('Player(s) %s wins the hand with a %s', winners.__repr__(), HandRanking.as_string[rankings[0][0]])
+			self.logger.info('Player(s) %s wins the hand with a %s', winners.__repr__(), HandRanking.as_string[winning_hands[0][0]])
 			# TODO: Handle all-ins
 			self.payoffs = self.pot * np.array(onehot) / np.sum(onehot)
 			self.credits += self.payoffs
@@ -215,12 +230,15 @@ class Game:
 				self.logger.error('Player %d invalid move: `%s`', self.active_player, PokerMoves.as_string[action])
 				raise ValueError
 
-			self.logger.info('High bet is %.2f', self.high_bet)
+			self.logger.info('High bet is $%.2f', self.high_bet)
 			self.logger.debug('Player %d played action: %s', self.active_player, PokerMoves.as_string[action])
 
 			if action == PokerMoves.FOLD:
 				self.player_states[self.active_player] = PlayerState.FOLDED
 				self.logger.info('Player %d folds', self.active_player)
+			elif action == PokerMoves.CHECK:
+				self.player_states[self.active_player] = PlayerState.CALLED
+				self.logger.info('Player %d checks', self.active_player)
 			else:
 				# Call first
 				bet_value = high_bet = self.high_bet
@@ -238,7 +256,7 @@ class Game:
 					# We are all in
 					bet_value = credit
 					self.player_states[self.active_player] = PlayerState.ALL_IN
-					self.logger.info('Player %d goes all-in', self.active_player)
+					self.logger.info('Player %d goes all-in with $%.2f', self.active_player, bet_value)
 				else:
 					if bet_value > high_bet:
 						# We also raised
@@ -249,6 +267,11 @@ class Game:
 					
 					# We called
 					self.player_states[self.active_player] = PlayerState.CALLED
+				
+				# Set minimum raise value
+				if bet_value > high_bet:
+					self.minimum_raise_value = bet_value - high_bet
+					self.logger.debug('Minimum raise value is $%.2f', self.minimum_raise_value)
 				
 				# Update pending bets
 				self.pending_bets[self.active_player] = bet_value
