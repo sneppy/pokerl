@@ -1,16 +1,16 @@
 import random
 import logging
 import numpy as np
-from typing import Union
-from pokerl.judger import compare_hands
-from pokerl.cards import create_default_deck
-from pokerl.enums import PokerMoves, PlayerState, HandRanking
+from typing import Union, List, Tuple, Generator
+from .judger import compare_hands
+from .cards import Card, create_default_deck
+from .enums import PokerMoves, PlayerState, HandRanking
 
 class Game:
 	"""  """
 
 	def __init__(self, **config):
-		"""  """
+		""" TODO """
 		
 		# Different credits
 		self.num_players: int= config.get('num_players', 4)
@@ -33,56 +33,91 @@ class Game:
 		self.payoffs = np.zeros((self.num_players,))
 	
 	@property
-	def community_cards(self):
-		"""  """
+	def community_cards(self) -> List[Card]:
+		""" The list of shared cards
+		
+		Depending on the current turn
+		of the hand, zero, three, four
+		or five cards are returned"""
 
+		# In Texas Hold'em, cards are burnt
+		# but the probability of 5 drawing
+		# a set of 5 cards is actually the
+		# same thus we don't care
 		return [] if self.turn == 0 else self.deck[:self.turn + 2]
 	
 	@property
 	def pot(self) -> float:
-		"""  """
+		""" The sum of all the bets """
 
 		return np.sum(self.bets)
 	
 	@property
 	def high_bet(self) -> float:
-		"""  """
+		""" The current highest bet """
 		
 		return np.max(self.pending_bets)
 	
 	@property
 	def high_bidders(self) -> np.ndarray:
-		"""  """
+		""" List of bidders that match the high bet """
 
 		return self.bets == self.high_bet
 	
 	@property
 	def pending_credits(self) -> np.ndarray:
-		"""  """
+		""" The estimated number of credits """
 
 		return self.credits - self.pending_bets
 	
 	@property
-	def blind_idx(self):
-		"""  """
+	def blind_idx(self) -> List[int]:
+		""" A 2-elements list with the index of the big blind and the index of the small blind """
 
 		return [self.big_blind_idx, self.small_blind_idx]
 	
 	@property
-	def blind_value(self):
-		"""  """
+	def blind_value(self) -> List[float]:
+		""" A 2-elements list with the value of big and small blinds """
 
 		return [self.big_blind, self.small_blind]
 	
 	@property
-	def game_over(self):
-		"""  """
+	def game_over(self) -> bool:
+		""" Returns true if all players but one are broken """
 
 		return np.sum(self.player_states != PlayerState.BROKEN) == 1
 	
 	@property
-	def active_state(self):
-		"""  """
+	def active_state(self) -> dict:
+		""" The state of the game as perceived by the active player
+		
+		Returns
+		-------
+		dict
+			A python dictionary with the
+			following items:
+			- `player_cards`: a 2-element
+				list with the cards in the
+				hand of the active player;
+			- `community_cards`: the list
+				of community cards;
+			- `credits`: the credits of all
+				players as a numpy array;
+			- `bets`: the bets of previous
+				turns by all players;
+			- `pending_bets`: the bets of
+				this turn;
+			- `minimum_raise_value`: the
+				minimum value required to
+				raise the bet;
+			- `valid_actions`: a tuple where
+				the first element encodes
+				the valid actions with ones
+				and the second element has
+				the indices of the valid
+				actions.
+		"""
 
 		return dict(
 			player_cards=self.get_cards_of(self.active_player),
@@ -94,48 +129,72 @@ class Game:
 			valid_actions=self.get_valid_actions(self.active_player)
 		)
 	
-	def get_first_playing(self, idx):
-		"""  """
+	def get_first_playing(self, idx: int) -> int:
+		""" Returns the index of the first non-broken player, starting from player `idx` """
 
 		return (idx + np.argmax(np.roll(self.player_states, -idx) != PlayerState.BROKEN)) % self.num_players
 	
-	def get_valid_actions(self, player: int=None) -> tuple:
-		"""  """
+	def get_valid_actions(self, player: int=None) -> Tuple[np.ndarray, Generator[int, None, None]]:
+		""" List of valid actions
+		
+		Returns the actions that `player`
+		could take in the current game
+		state
+		
+		Params
+		------
+		player : int
+			index of the player
+		
+		Returns
+		-------
+		tuple
+			A tuple where the first element
+			is a one-hot encoded array of
+			valid actions, and the second
+			element is a generator of indices
+			of valid actions
+		"""
 
 		if player is None: player = self.active_player
 
+		high_bet = self.high_bet
 		credit = self.credits[player]
-		pending_credit = self.pending_credits[player]
-		raise_credit = credit - self.high_bet
 		onehot = np.ones((PokerMoves.NUM_MOVES))
 		
 		# Compute minimum raise value
-		raise_values = np.array([0.1, 0.25, 0.5]) * raise_credit
-		raise_values = np.logical_and(raise_values > self.minimum_raise_value, (self.high_bet + raise_values) < credit)
+		raise_values = np.array([0.1, 0.25, 0.5]) * (credit - high_bet)
+		raise_values = np.logical_and(raise_values > self.minimum_raise_value, (high_bet + raise_values) < credit)
 		onehot[PokerMoves.RAISE_ANY:PokerMoves.RAISE_ANY + PokerMoves.NUM_RAISE_MOVES] = raise_values
 
 		# Compute call and check validity
-		onehot[PokerMoves.CHECK] = self.high_bet == .0
-		onehot[PokerMoves.CALL] = self.high_bet < credit
+		onehot[PokerMoves.CHECK] = high_bet == .0 # Check only if no hight bet
+		onehot[PokerMoves.CALL] = high_bet < credit # Call only if enough credits
 		
-		valids = [action for action, valid in enumerate(onehot) if valid]
-		self.logger.debug('Valid moves for player %d: %s', player, valids.__repr__())
+		# Generate action indices using
+		# a generator, so that we don't
+		# iterate unless requested
+		valids = (action for action, valid in enumerate(onehot) if valid)
+
 		return onehot, valids
 	
-	def get_cards_of(self, player: int):
-		"""  """
+	def get_cards_of(self, player: int) -> List[Card]:
+		""" Returns the cards in the hands of `player` """
 
 		card_idx = 5 + player * 2
 		return self.deck[card_idx:card_idx + 2]
 	
-	def get_hand_for(self, player):
-		"""  """
+	def get_hand_for(self, player) -> List[Card]:
+		""" Returns the final hand for `player` """
 
 		card_idx = 5 + player * 2
 		return self.deck[:5] + self.deck[card_idx:card_idx + 2]
 
 	def reset(self, **config):
-		"""  """
+		"""Reset game to its initial state
+		
+		Accepts the same parameters of `__init__`
+		"""
 
 		# Reset initial state
 		self.hand = 0
@@ -143,12 +202,13 @@ class Game:
 		self.big_blind_idx = self.num_players - 1
 		self.small_blind_idx = self.big_blind_idx - 1
 		self.credits[:] = self.start_credits if isinstance(self.start_credits, int) else self.start_credits[:]
+		self.player_states[:] = PlayerState.ACTIVE
 		
 		# Setup hand
 		self.setup_hand()
 	
 	def setup_hand(self):
-		"""  """
+		""" Setup a new hand """
 
 		self.hand += 1
 
@@ -182,7 +242,7 @@ class Game:
 		self.logger.info('Player %d starts the turn', self.active_player)
 	
 	def end_hand(self):
-		"""  """
+		""" Called to end the current hand and compute winners """
 
 		# Commit pending bets
 		self.bets += self.pending_bets
@@ -205,7 +265,9 @@ class Game:
 			self.credits[winner] += self.pot
 
 			self.logger.info('Player %d wins by last stand', winner)
-		else:	
+		else:
+			# TODO: Handle different pots for all-ins
+
 			# Get players' hands
 			hands = [self.get_hand_for(player) if state == PlayerState.CALLED or state == PlayerState.ALL_IN else [] for player, state in enumerate(self.player_states)]
 			onehot, winners, rankings = compare_hands(hands)
@@ -219,11 +281,23 @@ class Game:
 			self.logger.debug('Hand rankings: %s', rankings)
 			self.logger.info('Player(s) %s wins with %s', winners, ', '.join([HandRanking.as_string[ranking] for ranking, kickers in winning_hands]))
 		
+		# Compute player hand's net value
+		self.payoffs -= self.bets
+		
 		# Next hand
 		self.setup_hand()
 
-	def next_turn(self):
-		"""  """
+	def next_turn(self) -> Tuple[bool, bool, bool]:
+		""" Advances to next turn
+		
+		Returns
+		-------
+		tuple
+			A tuple indicating whether:
+			- the game has ended
+			- the hand has ended
+			- the turn has ended
+		"""
 
 		# Commit pending bets
 		self.bets += self.pending_bets
@@ -249,8 +323,24 @@ class Game:
 			self.active_player = (self.active_player + 1) % self.num_players
 			return False, False, True
 	
-	def next_player(self) -> tuple:
-		"""  """
+	def next_player(self) -> Tuple[bool, bool, bool]:
+		""" Find next player
+		
+		Depending on the game state,
+		this function may cause the
+		end of the hand or game.
+		At the end of the function,
+		`self.active_player` points
+		to the right player
+		
+		Returns
+		-------
+		tuple
+			A tuple indicating whether:
+			- the game has ended
+			- the hand has ended
+			- the turn has ended
+		"""
 
 		# Get number of playing players
 		active_players = np.logical_and(self.player_states != PlayerState.BROKEN, self.player_states != PlayerState.FOLDED)
@@ -274,8 +364,27 @@ class Game:
 			self.end_hand()
 			return False, True, False
 
-	def step(self, action: Union[int, float]) -> tuple:
-		"""  """
+	def step(self, action: Union[int, float]) -> Tuple[bool, bool, bool]:
+		""" Perform a step of the game
+		
+		Make the current active player
+		perform `action` and advance
+		game state
+		
+		Params
+		------
+		action
+			Index of a valid action, as in
+			`PokerMoves`
+		
+		Returns
+		-------
+		tuple
+			A tuple indicating whether:
+			- the game has ended
+			- the hand has ended
+			- the turn has ended
+		"""
 
 		# TODO: Allow for both discrete actions
 		# and continous bets

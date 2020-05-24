@@ -5,11 +5,11 @@ from .cards import Card
 from .enums import HandRanking, CardRank, CardSuit
 
 def eval_hand(hand: List[Card]) -> Tuple[int, List[int]]:
-	"""Evaluate hand of cards
+	""" Evaluate hand of cards
 
 	Params
 	------
-	`hand` : list of cards
+	hand : list of cards
 		Up to seven cards to evaluate
 		as a poker hand.
 	
@@ -101,7 +101,7 @@ def eval_hand(hand: List[Card]) -> Tuple[int, List[int]]:
 
 
 def get_kickers_value(kickers) -> int:
-	"""Returns the kickers value as a bit-packed integer
+	""" Returns the kickers value as a bit-packed integer
 	
 	For instance, the kickers `[9, 8, 3]`
 	are returned as `(9 << 8) | (8 << 4)
@@ -111,7 +111,7 @@ def get_kickers_value(kickers) -> int:
 	return reduce(lambda value, kicker: value | (kicker[1] << (kicker[0] << 2)), enumerate(reversed(kickers)), 0)
 
 def compare_hands(hands: List[List[Card]]) -> Tuple[List[int], List[int], Tuple[int, List[int]]]:
-	"""Compare multiple hands
+	""" Compares multiple hands
 	
 	Returns the winner and the
 	rankings of each hand

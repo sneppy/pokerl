@@ -6,9 +6,10 @@ class Card:
 
 	@property
 	def rank(self) -> int:
-		"""Returns the rank of the card
+		""" Returns the rank of the card
 		
-		The rank of an ace is 13 and not 0"""
+		The rank of an ace is 13 and not 0
+		"""
 
 		return (self.value & 0xf) or 13 # Make ace highest rank
 	
@@ -19,7 +20,7 @@ class Card:
 		return self.value >> 4
 	
 	def __init__(self, value: Union[int, str, Tuple[int]]):
-		"""Construct a new card
+		""" Constructs a new card
 		
 		Params
 		------
@@ -55,9 +56,10 @@ class Card:
 		self.value = value
 	
 	def __repr__(self) -> str:
-		"""Return unicode representation
+		""" Returns the unicode representation of the card
 		
-		See https://en.wikipedia.org/wiki/Playing_cards_in_Unicode#Playing_cards_deck"""
+		See https://en.wikipedia.org/wiki/Playing_cards_in_Unicode#Playing_cards_deck
+		"""
 		
 		if (self.value & 0xf) > CardRank.JACK:
 			return chr(0x1f0a2 + self.value)

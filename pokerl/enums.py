@@ -1,5 +1,10 @@
 class HandRanking:
-	"""  """
+	""" Enum of hand rankings in poker
+	
+	A list with a description of
+	each type of hand can be found
+	here: https://en.wikipedia.org/wiki/List_of_poker_hands#Hand-ranking_categories
+	"""
 
 	STRAIGHT_FLUSH = 1
 	POKER = 2
@@ -12,6 +17,7 @@ class HandRanking:
 	HIGH = 9
 	NONE = 10
 
+	# Strings for each hand type
 	as_string = [
 		'Five of a Kind',
 		'Straight Flush',
@@ -27,7 +33,7 @@ class HandRanking:
 	]
 
 class CardSuit:
-	"""  """
+	""" Enum with the suits of playing cards """
 
 	SPADES = 0x0
 	HEARTS = 0x1
@@ -35,6 +41,7 @@ class CardSuit:
 	CLUBS = 0x3
 
 	NUM_SUITS = 4
+	MAX_SUIT = 3
 
 	as_string = ['Spades', 'Hearts', 'Diamonds', 'Clubs']
 	as_symbol = ['\u2660', '\u2665', '\u2666' '\u2663']
@@ -47,7 +54,7 @@ class CardSuit:
 	}
 
 class CardRank:
-	"""  """
+	""" Enum with ranks of playing cards """
 
 	ONE = 0x0
 	TWO = 0x1
@@ -65,6 +72,7 @@ class CardRank:
 	ACE = 0xd
 
 	NUM_RANKS = 13
+	MAX_RANK = 13
 
 	as_string = ['Ace', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Jack', 'Queen', 'King', 'Ace']
 	as_symbol = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
@@ -87,7 +95,11 @@ class CardRank:
 	}
 
 class PokerMoves:
-	"""  """
+	""" Available poker moves
+	
+	Raise move may be changed
+	at any time
+	"""
 
 	FOLD = 0
 	CHECK = 1
@@ -104,7 +116,16 @@ class PokerMoves:
 	as_string = ['fold', 'check', 'call', 'raise 10%', 'raise 25%', 'raise half', 'all-in']
 
 class PlayerState:
-	"""  """
+	""" Enum with the states of a poker player
+	
+	A player can be either playing or
+	broken. A playing player can be:
+	- folded, if he folded in this hand;
+	- active, if he gets to bet in the
+		current turn;
+	- called, if he called or raised;
+	- all-in, if he bet all he had.
+	"""
 
 	FOLDED = 0
 	ACTIVE = 1
