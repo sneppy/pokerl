@@ -4,7 +4,7 @@ import numpy as np
 from typing import Union
 from pokerl.judger import compare_hands
 from pokerl.cards import create_default_deck
-from pokerl.enums import PokerMoves, PlayerState
+from pokerl.enums import PokerMoves, PlayerState, HandRanking
 
 class Game:
 	"""  """
@@ -69,7 +69,7 @@ class Game:
 	def get_first_playing(self, idx):
 		"""  """
 
-		return (idx + np.argmax(np.roll(self.player_states, -idx))) % self.num_players
+		return (idx + np.argmax(np.roll(self.player_states, -idx) != PlayerState.BROKEN)) % self.num_players
 	
 	def get_cards_of(self, player):
 		"""  """
@@ -102,7 +102,8 @@ class Game:
 		random.shuffle(self.deck)
 		self.logger.info('Dealing cards')
 		for player in range(self.num_players):
-			self.logger.info('Player %d has cards: %s', player, self.get_cards_of(player).__repr__())
+			if self.player_states[player] != PlayerState.BROKEN:
+				self.logger.info('Player %d has cards: %s', player, self.get_cards_of(player).__repr__())
 
 		# Reset player states
 		self.turn = 0
@@ -115,13 +116,15 @@ class Game:
 		self.logger.info('Player %d is big blind', self.big_blind_idx)
 		self.logger.info('Big blind is $%.2f; small blind is $%.2f', self.big_blind, self.small_blind)
 		self.pending_bets[self.blind_idx] += self.blind_value
+		self.player_states[self.big_blind_idx] = PlayerState.CALLED
 
 		# Update active player
 		self.active_player = self.get_first_playing(self.big_blind_idx + 1)
+		self.logger.info('Player %d starts the turn', self.active_player)
 
 		# Update blinds for next hand
 		self.small_blind_idx = self.big_blind_idx
-		self.big_blind_idx = self.get_first_playing(self.big_blind_idx + 1)
+		self.big_blind_idx = self.active_player
 
 	def next_turn(self):
 		"""  """
@@ -143,8 +146,9 @@ class Game:
 			hands = [self.get_hand_for(idx) if state in [PlayerState.CALLED, PlayerState.ALL_IN] else [] for idx, state in enumerate(self.player_states)]
 			self.logger.debug('Final hands: %s', hands.__repr__())
 
-			onehot, winners, _ = compare_hands(hands)
-			self.logger.info('Player(s) %s wins the hand', winners.__repr__())
+			onehot, winners, rankings = compare_hands(hands)
+			winning_hands = [rankings[winner] for winner in winners]
+			self.logger.info('Player(s) %s wins the hand with a %s', winners.__repr__(), HandRanking.as_string[rankings[0][0]])
 			# TODO: Handle all-ins
 			self.payoffs = self.pot * np.array(onehot) / np.sum(onehot)
 			self.credits += self.payoffs
@@ -153,7 +157,6 @@ class Game:
 
 			# Set broken state
 			self.player_states[self.credits <= self.big_blind] = PlayerState.BROKEN
-
 			self.logger.info('; '.join(['Player %d has $%.2f' % credit for credit in enumerate(self.credits)]))
 			
 			# Setup new hand
@@ -191,14 +194,16 @@ class Game:
 			#valid_actions = []
 			#if not action in valid_actions: raise ValueError
 
+			self.logger.info('High bet is %.2f', self.high_bet)
 			self.logger.debug('Player %d played action: %s', self.active_player, PokerMoves.as_string[action])
 
 			if action == PokerMoves.FOLD:
 				self.player_states[self.active_player] = PlayerState.FOLDED
+				self.logger.info('Player %d folds', self.active_player)
 			else:
 				# Call first
 				bet_value = high_bet = self.high_bet
-				credit = self.credits[self.active_player]
+				credit = self.credits[self.active_player] + self.pending_bets[self.active_player] # Needed for small blind
 
 				if action >= PokerMoves.RAISE_ANY:
 					future_credit = credit - bet_value

@@ -13,16 +13,17 @@ class HandRanking:
 	NONE = 10
 
 	as_string = [
-		'Five of a kind',
-		'Straight flush',
-		'Four of a kind',
-		'Full house',
+		'Five of a Kind',
+		'Straight Flush',
+		'Four of a Kind',
+		'Full House',
 		'Flush',
 		'Straight',
-		'Three of a kind',
-		'Two pair',
-		'One pair',
-		'High card'
+		'Three of a Kind',
+		'Two Pair',
+		'One Pair',
+		'High Card',
+		'Nothing'
 	]
 
 class CardSuit:

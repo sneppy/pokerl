@@ -80,7 +80,7 @@ def compare_hands(hands) -> list:
 
 		return reduce(lambda value, kicker: value | (kicker[1] << (kicker[0] << 2)), enumerate(reversed(kickers)), 0)
 
-	rankings = (eval_hand(hand) for hand in hands)
+	rankings = [eval_hand(hand) for hand in hands]
 
 	winners = []
 	best_rank = HandRanking.NONE
