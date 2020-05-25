@@ -27,7 +27,7 @@ game.reset() # Init game state
 ```
 
 At each step, there is an _active player_ and an _active state_, which captures the state of the game as seen by the active player.
-The active player performs actions using `game.step(action)`:
+The active player performs actions by passing a valid `int` value to `game.step(action)`:
 
 ```python
 from pokerl.enums import PokerMoves
@@ -35,7 +35,7 @@ from pokerl.enums import PokerMoves
 game.step(PokerMoves.CALL) # or 2
 ```
 
-The `game.active_state` property is an object of type `Game.StateView` that has various informations that can be used by the agent to perform informed decisions.
+The `game.active_state` property is an object of type `Game.StateView` that has various informations that can be used by the agent to make informed decisions.
 In particular, `Game.StateView.valid_actions` is a one-hot encoded `np.ndarray` of valid actions:
 
 ```python
@@ -57,6 +57,44 @@ if done: print('game is over')
 After each hand, the net profit of each player is saved in `game.payoffs`.
 
 For more info see the [Wiki page](https://github.com/nondecidibile/pokerl/wiki).
+
+### Network
+
+This is the `network` branch. It is an experimental branch where it is possible to play online games.
+
+To create a server create a new instance of the `pokerl.network.PokerGameServer` class:
+
+```python
+from pokerl.network import PokerGameServer
+server = PokerGameServer(num_players=3)
+```
+
+The constructor accepts the same parameters of `Game`.
+To start the server, use `server.run(host, port)`:
+
+```python
+server.run('localhost', 25560)
+server.run() # Run on default host and port
+```
+
+A client is an instance of `pokerl.network.PokerGameClient`.
+The contructor accepts a strategy policy `agent`, which must be a subclass of `pokerl.agents.PokerAgent`:
+
+```python
+from pokerl.agents import RandomAgent
+client = PokerGameClient(agent=RandomAgent)
+```
+
+To connect to a server, use `client.connect(host, port)`:
+
+```python
+client.connect('localhost', 25560)
+client.connect() # Use default host and port
+```
+
+Once `num_players` clients have connected the game begins.
+
+At the moment it is not possible to follow the actions of other clients.
 
 Contributors
 ------------
