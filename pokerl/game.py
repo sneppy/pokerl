@@ -36,6 +36,158 @@ class Game:
 	```
 	"""
 
+	class StateView:
+		""" Class used to encapsulate the game state as seen by a player
+		
+		This class serves two purposes. It
+		implements a better interface than
+		a bare dict to access the state, and
+		implements `__setstate__` and
+		`__getstate__` so that it can be
+		easily pickled.
+
+		Usage
+		-----
+
+		```python
+		state = game.active_state # Get StateView for active player
+		valid_actions = state.valid_actions
+		credit = state.credit
+		hand_ranking, _ = eval_hand(state.player_hand)
+
+		# Predict action
+		action = predict(([credit, hand_ranking], valid_actions))
+		over, _, _ = game.step(action)
+		```
+
+		State Attributes
+		-----
+		player : int
+			Index of the player associated
+			to this game state view.
+		valid_actions : numpy array
+			A one-hot encoded array of valid
+			actions.
+		num_players : int
+			Number of players that started
+			the game.
+		turn : int
+			The hand turn.
+		player_cards : list of cards
+			A 2-element list with the cards
+			in the hand of the player.
+		community_cards : list of cards
+			A list with the community cards;
+			the number of cards depends on
+			the turn of the game.
+		credits : numpy array
+			A numpy array with shape
+			`(num_players,)` with the credits
+			of each player.
+		bets : numpy array
+			An array with shape `(num_players,)`
+			where each element is the commited
+			bet of that player in the current
+			hand.
+		pending_bets : numpy array
+			An array with shape `(num_players,)`
+			where each element is the amount
+			bet by that player in this turn.
+		minimum_raise_value : float
+			The minimum bet required to make
+			a raise.
+		
+		State Properties
+		--------
+		valid_action_indices : generator of ints
+			A generator expression the yields
+			the indices of the valid actions;
+			can be used in place of the one-
+			hot encoded array.
+		player_hand : list of cards
+			The player cards plus the
+			community cards.
+		pot : float
+			The sum of all commited bets.
+		credit : float
+			The credit of the player captured
+			by this view.
+		"""
+		
+		def __init__(self, game: 'Game', player: int=None):
+			"""  """
+
+			assert game is not None and isinstance(game, Game), 'Invalid game'
+
+			self.player = player or game.active_player
+			self.valid_actions, _ = game.get_valid_actions(self.player)
+			self.num_players = game.num_players
+			self.turn = game.turn
+			self.player_cards = game.get_cards_of(self.player)
+			self.community_cards = game.community_cards
+			self.credits = game.credits
+			self.bets = game.bets
+			self.pending_bets = game.pending_bets
+			self.minimum_raise_value = game.minimum_raise_value
+		
+		@property
+		def valid_action_indices(self) -> Generator[int, None, None]:
+			""" Returns the indices of the valid actions """
+
+			return (action for action, valid in enumerate(self.valid_actions) if valid)
+		
+		@property
+		def player_hand(self) -> List[Card]:
+			""" Returns the player cards plus the community cards """
+
+			return self.player_cards + self.community_cards
+		
+		@property
+		def pot(self) -> float:
+			""" Returns the current pot """
+
+			return np.sum(self.bets)
+		
+		@property
+		def credit(self) -> int:
+			""" Returns the credit of the player captured by this state """
+
+			return self.credits[self.player]
+		
+		def __getstate__(self) -> tuple:
+			"""  """
+			
+			# Pack state in tuple
+			return (
+				self.player,
+				self.valid_actions,
+				self.num_players,
+				self.turn,
+				self.player_cards,
+				self.community_cards,
+				self.credits,
+				self.bets,
+				self.bets,
+				self.minimum_raise_value
+			)
+
+		def __setstate__(self, state: tuple):
+			"""  """
+			
+			# Unpack state
+			(
+				self.player,
+				self.valid_actions,
+				self.num_players,
+				self.turn,
+				self.player_cards,
+				self.community_cards,
+				self.credits,
+				self.bets,
+				self.bets,
+				self.minimum_raise_value
+			) = state
+
 	def __init__(self, **config):
 		""" TODO """
 		
@@ -116,45 +268,16 @@ class Game:
 		return np.sum(self.player_states != PlayerState.BROKEN) == 1
 	
 	@property
-	def active_state(self) -> dict:
+	def active_state(self) -> StateView:
 		""" The state of the game as perceived by the active player
 		
 		Returns
 		-------
-		dict
-			A python dictionary with the
-			following items:
-			- `player_cards`: a 2-element
-				list with the cards in the
-				hand of the active player;
-			- `community_cards`: the list
-				of community cards;
-			- `credits`: the credits of all
-				players as a numpy array;
-			- `bets`: the bets of previous
-				turns by all players;
-			- `pending_bets`: the bets of
-				this turn;
-			- `minimum_raise_value`: the
-				minimum value required to
-				raise the bet;
-			- `valid_actions`: a tuple where
-				the first element encodes
-				the valid actions with ones
-				and the second element has
-				the indices of the valid
-				actions.
+		GameStateView
+			see the class for more info
 		"""
-
-		return dict(
-			player_cards=self.get_cards_of(self.active_player),
-			community_cards=self.community_cards,
-			credits=self.credits,
-			bets=self.bets,
-			pending_bets=self.pending_bets,
-			minimum_raise_value=self.minimum_raise_value,
-			valid_actions=self.get_valid_actions(self.active_player)
-		)
+		
+		return self.StateView(self, self.active_player)
 	
 	def get_first_playing(self, idx: int) -> int:
 		""" Returns the index of the first non-broken player, starting from player `idx` """
