@@ -149,10 +149,61 @@ class Game:
 			return np.sum(self.bets)
 		
 		@property
+		def high_bet(self) -> float:
+			""" Returns the current high bet """
+
+			return np.max(self.pending_bets)
+		
+		@property
 		def credit(self) -> int:
 			""" Returns the credit of the player captured by this state """
 
 			return self.credits[self.player]
+		
+		def __repr__(self) -> dict:
+			"""  """
+
+			return dict(
+				player=self.player,
+				valid_actions=self.valid_actions,
+				num_players=self.num_players,
+				turn=self.turn,
+				player_cards=self.player_cards,
+				community_cards=self.community_cards,
+				credits=self.credits,
+				bets=self.bets,
+				minimum_raise_value=self.minimum_raise_value
+			)
+		
+		def __str__(self) -> str:
+			"""  """
+			
+			template = (
+				'==== State =================\n'
+				'# Player ID_________{player:d}\n'
+				'# Game turn_________{turn:d}\n'
+				'# Player credit_____${credit:.2f}\n'
+				'# Player cards______{player_cards:s}\n'
+				'# Community cards___{community_cards:s}\n'
+				'# Pot_______________${pot:.2f}\n'
+				'# High bet__________${high_bet:.2f}\n'
+				'# Minimum raise_____${minimum_raise_value:.2f}\n'
+				'# Valid actions_____{valid_actions}\n'
+			)
+
+			valid_actions = [(action, PokerMoves.as_string[action]) for action in self.valid_action_indices]
+
+			return template.format(
+				player=self.player,
+				turn=self.turn,
+				credit=self.credit,
+				player_cards=', '.join(str(c) for c in self.player_cards),
+				community_cards=', '.join(str(c) for c in self.community_cards) or 'n/a',
+				pot=self.pot,
+				high_bet=self.high_bet,
+				minimum_raise_value=self.minimum_raise_value,
+				valid_actions=', '.join([f'{action}: {name}' for action, name in valid_actions])
+			)
 		
 		def __getstate__(self) -> tuple:
 			"""  """
@@ -167,7 +218,7 @@ class Game:
 				self.community_cards,
 				self.credits,
 				self.bets,
-				self.bets,
+				self.pending_bets,
 				self.minimum_raise_value
 			)
 
@@ -184,7 +235,7 @@ class Game:
 				self.community_cards,
 				self.credits,
 				self.bets,
-				self.bets,
+				self.pending_bets,
 				self.minimum_raise_value
 			) = state
 
@@ -374,6 +425,7 @@ class Game:
 		# Shuffle deck
 		random.shuffle(self.deck)
 		self.logger.info('Dealing cards')
+
 		for player in range(self.num_players):
 			if self.player_states[player] != PlayerState.BROKEN:
 				self.logger.info('Player %d has cards: %s', player, self.get_cards_of(player))
@@ -583,7 +635,7 @@ class Game:
 		# TODO: Allow for both discrete actions
 		# and continous bets
 
-		if isinstance(action, int):
+		if isinstance(action, (int, np.integer)):
 			# TODO: Compute valid actions
 			_, valid_actions = self.get_valid_actions()
 			if not action in valid_actions:
