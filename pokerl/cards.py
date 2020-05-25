@@ -19,6 +19,12 @@ class Card:
 
 		return self.value >> 4
 	
+	@property
+	def id(self) -> int:
+		""" Return a unique id in the range [0, 52) """
+
+		return (self.value & 0xf) + (self.value >> 4) * 13
+	
 	def __init__(self, value: Union[int, str, Tuple[int]]):
 		""" Constructs a new card
 		
