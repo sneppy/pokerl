@@ -417,7 +417,7 @@ class Game:
 
 		# Reset player states
 		self.turn = 0
-		self.player_states[self.credits <= self.big_blind] = PlayerState.BROKEN
+		self.player_states[self.credits <= .0] = PlayerState.BROKEN
 		self.player_states[self.player_states != PlayerState.BROKEN] = PlayerState.ACTIVE
 		self.bets[:] = .0
 		self.pending_bets[:] = .0
@@ -608,7 +608,7 @@ class Game:
 		else:
 			# One winner takes all
 			self.end_hand()
-			return False, True, False
+			return self.game_over, True, False
 
 	def step(self, action: Union[int, float]) -> Tuple[bool, bool, bool]:
 		""" Perform a step of the game
