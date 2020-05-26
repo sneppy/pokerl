@@ -608,7 +608,7 @@ class Game:
 		else:
 			# One winner takes all
 			self.end_hand()
-			return False, True, False
+			return self.game_over, True, False
 
 	def step(self, action: Union[int, float]) -> Tuple[bool, bool, bool]:
 		""" Perform a step of the game

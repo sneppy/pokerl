@@ -70,11 +70,12 @@ server = PokerGameServer(num_players=3)
 ```
 
 The constructor accepts the same parameters of `Game`.
-To start the server, use `server.run(host, port)`:
+To start the server, use `server.setup(host, port)` and `server.run()`:
 
 ```python
-server.run('localhost', 25560)
-server.run() # Run on default host and port
+server.setup('localhost', 25560)
+server.setup() # Run on default host and port
+server.run(num_games=10) # Run 10 games
 ```
 
 A client is an instance of `pokerl.network.PokerGameClient`.

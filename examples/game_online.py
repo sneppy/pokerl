@@ -31,4 +31,6 @@ if args.host:
 else:
 	# Create server
 	server = PokerGameServer(num_players=args.num_players)
-	server.run(*args.bind.split(':'))
+	server.setup(*args.bind.split(':'))
+	server.run()
+	server.close()
