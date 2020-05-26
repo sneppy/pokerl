@@ -144,5 +144,6 @@ cython_debug/
 temp/
 temp.*
 
-# Tensorboard logs
+# Tensorboard logs and models
 /.logs/
+/.models/
