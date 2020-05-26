@@ -58,7 +58,7 @@ if done: print('game is over')
 
 After each hand, the net profit of each player is saved in `game.payoffs`.
 
-For more info see the [Wiki page](https://github.com/nondecidibile/pokerl/wiki).
+For more info see the [Wiki page](https://github.com/sneppy/pokerl/wiki).
 
 ### Environments
 

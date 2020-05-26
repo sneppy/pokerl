@@ -113,7 +113,7 @@ class PokerMoves:
 	NUM_MOVES = 7
 	NUM_RAISE_MOVES = 3
 
-	as_string = ['Fold', 'Check', 'Call', 'Raise 10%', 'Raise 25%', 'Raise half', 'all-in']
+	as_string = ['Fold', 'Check', 'Call', 'Raise 10%', 'Raise 25%', 'Raise half', 'All-in']
 
 class PlayerState:
 	""" Enum with the states of a poker player
