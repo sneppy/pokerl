@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Tuple, List
 from .env import PokerEnv, Game
+from ..enums import PlayerState
 
 class PokerGameEnv(PokerEnv):
 	""" RL environment that simualates an entire poker game
@@ -30,8 +31,24 @@ class PokerGameEnv(PokerEnv):
 	def step(self, action: int) -> Tuple[Game.StateView, float, bool]:
 		"""  """
 		
+		reward = .0
 		done, hand, _ = self.game.step(action)
-		if hand: reward = self.game.payoffs[self.player_agent]
-		else: reward = .0
 
-		return self.game.active_state, reward, done
+		if done or self.game.player_states[self.player_agent] == PlayerState.BROKEN:
+			# Game has ended or we are broken anyway
+			return self.game.active_state, self.game.payoffs[self.player_agent], True, True
+		else:
+			while not hand and self.game.active_player != self.player_agent:
+				# Step over opponents
+				action = self.agents[self.game.active_player](self.game.active_state)
+				done, hand, _ = self.game.step(action)
+			
+			# Set reward if hand has ended
+			if hand: reward = self.game.payoffs[self.player_agent]
+
+			while not done and self.game.active_player != self.player_agent:
+				# Step over opponents
+				action = self.agents[self.game.active_player](self.game.active_state)
+				done, *_ = self.game.step(action)
+		
+			return self.game.active_state, reward, done, hand
