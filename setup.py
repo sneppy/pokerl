@@ -36,7 +36,7 @@ classifiers = [
 ]
 
 # Packages and dependencies
-packages = find_packages()
+packages = [p for p in find_packages() if p.startswith('pokerl')]
 dependencies = ['numpy >= 1.18.0']
 
 setup(

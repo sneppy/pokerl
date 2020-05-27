@@ -1,5 +1,7 @@
 # PokeRL
 
+[![Build Status](https://travis-ci.com/sneppy/pokerl.svg?branch=v1)](https://travis-ci.com/sneppy/pokerl)
+
 **pokerl** is a poker Reinforcement Learning (RL) environment.
 
 Currently the only game supported is _No Limit Texas Hold'em_.
