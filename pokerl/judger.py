@@ -38,14 +38,6 @@ def eval_hand(hand: List[Card]) -> Tuple[int, List[int]]:
 		rank_sorted = sorted(hand, key=lambda c: c.rank, reverse=True)
 		suit_sorted = sorted(hand, key=lambda c: (c.suit << 4) | c.rank, reverse=True)
 
-		# TODO: Here's the special case where
-		# the ace is actually the lowest
-		# card in a straight, e.g. 5, 4,
-		# 3, 2, 1
-
-		#print(rank_sorted)
-		#print(suit_sorted)
-
 		idx = 0
 		flush = CardSuit.NUM_SUITS
 		both = CardSuit.NUM_SUITS
@@ -87,6 +79,14 @@ def eval_hand(hand: List[Card]) -> Tuple[int, List[int]]:
 		elif numakind == 3: threeakind.append(kind & 0xf)
 		elif numakind == 4: fourakind.append(kind & 0xf)
 
+		# Handle special case of 5-A straight
+		if (both >> 8) == 4 and (both >> 4 & 0xf) == CardRank.FIVE:
+			ace = next((True for c in hand if c.rank == CardRank.ACE and c.suit == (both & 0xf)), False)
+			if ace: return HandRanking.STRAIGHT_FLUSH, [CardRank.FIVE]
+		elif (straight >> 4) == 4 and (straight & 0xf) == CardRank.FIVE:
+			ace = next((True for c in hand if c.rank == CardRank.ACE), False)
+			if ace: return HandRanking.STRAIGHT, [CardRank.FIVE]
+		
 		if (both >> 8) >= 5: return HandRanking.STRAIGHT_FLUSH, [both >> 4 & 0xf]
 		elif fourakind: return HandRanking.POKER, [fourakind[0], *islice((c.rank for c in rank_sorted if c.rank != fourakind[0]), 1)]
 		elif len(threeakind) > 1: return HandRanking.FULL, [threeakind[0], threeakind[1]]
@@ -97,8 +97,6 @@ def eval_hand(hand: List[Card]) -> Tuple[int, List[int]]:
 		elif len(twoakind) > 1: return HandRanking.TWO_PAIR, [twoakind[0], twoakind[1], *islice((c.rank for c in rank_sorted if c.rank != twoakind[0] and c.rank != twoakind[1]), 1)]
 		elif twoakind: return HandRanking.PAIR, [twoakind[0], *islice((c.rank for c in rank_sorted if c.rank != twoakind[0]), 3)]
 		else: return HandRanking.HIGH, [c.rank for c in rank_sorted[:5]]
-
-
 
 def get_kickers_value(kickers) -> int:
 	""" Returns the kickers value as a bit-packed integer
