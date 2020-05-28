@@ -420,7 +420,6 @@ class Game:
 		self.player_states[self.credits <= .0] = PlayerState.BROKEN
 		self.player_states[self.player_states != PlayerState.BROKEN] = PlayerState.ACTIVE
 		self.bets[:] = .0
-		self.pending_bets[:] = .0
 
 		# Shuffle deck
 		random.shuffle(self.deck)
@@ -435,10 +434,15 @@ class Game:
 		self.big_blind_idx = self.get_first_playing(self.small_blind_idx + 1)
 		self.active_player = self.get_first_playing(self.big_blind_idx + 1)
 		
-		# Blind bets
-		self.pending_bets[self.blind_idx] += self.blind_value
+		# Blind bets.
+		self.pending_bets[:] = .0
+		self.pending_bets[self.blind_idx] = self.blind_value
 		self.player_states[self.big_blind_idx] = PlayerState.CALLED
-		self.minimum_raise_value = self.big_blind
+
+		# Check if all-in and clip blinds
+		self.player_states[self.pending_bets > self.credits] = PlayerState.ALL_IN
+		self.pending_bets = np.minimum(self.pending_bets, self.credits)
+		self.minimum_raise_value = np.max(self.pending_bets)
 
 		self.logger.info('; '.join(['Player %d is %s with $%.2f' % (player, PlayerState.as_string[state], self.credits[player]) for player, state in enumerate(self.player_states)]))
 		self.logger.info('Player %d is big blind', self.big_blind_idx)
@@ -487,11 +491,11 @@ class Game:
 			self.logger.debug('Final hands: %s', hands)
 
 			# Sort players by lowest bets and generate allins iterator
-			sorted_players = np.argsort(self.bets)
+			sorted_players = np.argsort(bets)
 			showdown = (player for player in sorted_players if self.player_states[player] == PlayerState.CALLED or self.player_states[player] == PlayerState.ALL_IN)
 			
 			for player in showdown:
-				if bets[player] == .0: break # Nothing left to split
+				if np.all(bets <= .0): break # Nothing left to split
 				if num_potential_winners == 1:
 					# Player must be potential winner
 					self.payoffs[player] += np.sum(bets)
