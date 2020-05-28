@@ -243,11 +243,12 @@ class Game:
 		""" TODO """
 		
 		# Different credits
-		self.num_players: int= config.get('num_players', 4)
+		self.num_players: int = config.get('num_players', 4)
 		self.start_credits: Union[np.ndarray, int, list] = config.get('start_credits', 100)
-		self.big_blind: float= config.get('big_blind', 2)
-		self.small_blind: float= config.get('small_blind', 1)
-		self.logger: logging.Logger= config.get('logger', logging.getLogger())
+		self.big_blind: float = config.get('big_blind', 2)
+		self.small_blind: float = config.get('small_blind', 1)
+		self.logger: logging.Logger = config.get('logger', logging.getLogger())
+		self.dealer_idx: int = config.get('dealer', 0)
 
 		self.deck = create_default_deck()
 		self.turn = 0
@@ -399,11 +400,11 @@ class Game:
 		Accepts the same parameters of `__init__`
 		"""
 
+		self.dealer_idx = config.get('dealer', 0)
+
 		# Reset initial state
 		self.hand = 0
 		self.active_player = 0
-		self.big_blind_idx = self.num_players - 1
-		self.small_blind_idx = self.big_blind_idx - 1
 		self.credits[:] = self.start_credits if isinstance(self.start_credits, int) else self.start_credits[:]
 		self.player_states[:] = PlayerState.ACTIVE
 		
@@ -414,12 +415,10 @@ class Game:
 		""" Setup a new hand """
 
 		self.hand += 1
+		self.turn = 0
 
 		# Reset player states
-		self.turn = 0
-		self.player_states[self.credits <= .0] = PlayerState.BROKEN
 		self.player_states[self.player_states != PlayerState.BROKEN] = PlayerState.ACTIVE
-		self.bets[:] = .0
 
 		# Shuffle deck
 		random.shuffle(self.deck)
@@ -429,12 +428,14 @@ class Game:
 			if self.player_states[player] != PlayerState.BROKEN:
 				self.logger.info('Player %d has cards: %s', player, self.get_cards_of(player))
 
-		# Update blinds and active player
-		self.small_blind_idx = self.get_first_playing(self.small_blind_idx + 1)
+		# Update dealer, blinds and set active player
+		self.dealer_idx = self.get_first_playing(self.dealer_idx + 1)
+		self.small_blind_idx = self.get_first_playing(self.dealer_idx + 1)
 		self.big_blind_idx = self.get_first_playing(self.small_blind_idx + 1)
 		self.active_player = self.get_first_playing(self.big_blind_idx + 1)
 		
 		# Blind bets.
+		self.bets[:] = .0
 		self.pending_bets[:] = .0
 		self.pending_bets[self.blind_idx] = self.blind_value
 		self.player_states[self.big_blind_idx] = PlayerState.CALLED
@@ -445,7 +446,7 @@ class Game:
 		self.minimum_raise_value = np.max(self.pending_bets)
 
 		self.logger.info('; '.join(['Player %d is %s with $%.2f' % (player, PlayerState.as_string[state], self.credits[player]) for player, state in enumerate(self.player_states)]))
-		self.logger.info('Player %d is big blind', self.big_blind_idx)
+		self.logger.info('Player %d is small blind; player %d is big blind', self.small_blind_idx, self.big_blind_idx)
 		self.logger.info('Big blind is $%.2f; small blind is $%.2f', self.big_blind, self.small_blind)
 		self.logger.info('Player %d starts the turn', self.active_player)
 	
@@ -530,6 +531,9 @@ class Game:
 		self.payoffs -= self.bets
 
 		self.logger.info('Players\'s net profits: %s', self.payoffs)
+
+		# Update player state
+		self.player_states[self.credits <= .0] = PlayerState.BROKEN
 		
 		# Next hand
 		self.setup_hand()
@@ -568,7 +572,7 @@ class Game:
 				self.player_states[next_turn_players] = PlayerState.ACTIVE
 
 			self.logger.info('Community cards: %s', self.deck[:self.turn + 2].__repr__())
-			self.active_player = (self.active_player + 1) % self.num_players
+			self.active_player = self.get_first_playing(self.dealer_idx + 1)
 			return False, False, True
 	
 	def next_player(self) -> Tuple[bool, bool, bool]:
